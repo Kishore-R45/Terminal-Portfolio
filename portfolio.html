@@ -1,0 +1,490 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Kishore Portfolio Terminal</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@300;400;500;600;700&display=swap"
+      rel="stylesheet"
+    />
+    <style>
+      * { margin: 0; padding: 0; box-sizing: border-box; }
+
+      body {
+        font-family: "JetBrains Mono", "Consolas", "Monaco", monospace;
+        background: #002b36;                 /* Solarized Dark background */
+        color: #93a1a1;                       /* base text */
+        overflow: hidden;
+        height: 100vh;
+      }
+
+      #particles-canvas {
+        position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+        pointer-events: none; z-index: 0;
+      }
+
+      .container {
+        position: relative; z-index: 10;
+        display: flex; align-items: center; justify-content: center;
+        min-height: 100vh; padding: 20px;
+      }
+
+      .terminal-window {
+        width: 100%; max-width: 800px;
+        background: rgba(0, 43, 54, 0.95);
+        backdrop-filter: blur(10px);
+        border-radius: 8px;
+        box-shadow: 0 25px 50px -12px rgba(0,0,0,.8);
+        border: 1px solid #073642;
+      }
+
+      .terminal-header {
+        display: flex; align-items: center; justify-content: space-between;
+        padding: 12px 16px; background: #073642;
+        border-radius: 8px 8px 0 0; border-bottom: 1px solid #586e75;
+      }
+
+      .window-controls { display: flex; gap: 8px; }
+      .control-btn { width: 12px; height: 12px; border-radius: 50%; }
+      .control-btn.close { background: #dc322f; }
+      .control-btn.minimize { background: #b58900; }
+      .control-btn.maximize { background: #2aa198; }
+
+      .terminal-title { color: #93a1a1; font-size: 14px; font-weight: 500; }
+
+      .terminal-content {
+        height: 400px; overflow-y: auto; padding: 16px;
+        font-size: 14px; line-height: 1.5;
+      }
+
+      .command-line { margin-bottom: 10px; }
+      .prompt { color: #2aa198; font-weight: 600; }
+
+      .command-output {
+        margin-left: 14px; margin-bottom: 6px;
+        white-space: pre-wrap;                /* preserve intended spacing */
+        font-family: inherit;
+      }
+
+      .heading-text { color: #b58900; font-weight:bold; }   /* gold headings */
+      .command-line-text { color: #d0d7d7;
+      font-weight: 500; }               /* body text */
+
+      .command-output a {
+        color: #268bd2; text-decoration: none;             /* blue links */
+      }
+      .command-output a:hover { text-decoration: underline; }
+
+      .error-text { color: #dc322f; }
+
+      .input-line { display: flex; align-items: center; gap: 8px; }
+      #command-input {
+        background: transparent; border: none; outline: none;
+        color: #93a1a1; font-family: inherit; font-size: inherit; flex: 1;
+      }
+
+      .cursor { color: #2aa198; animation: blink 1s infinite; }
+      @keyframes blink { 0%,50%{opacity:1} 51%,100%{opacity:0} }
+
+      .typewriter {
+        overflow: hidden; white-space: nowrap; border-right: 2px solid #2aa198;
+        animation: typing 3s steps(40, end), blink-caret 1s step-end infinite;
+      }
+      @keyframes typing { from { width: 0; } to { width: 100%; } }
+      @keyframes blink-caret { from,to {border-color: transparent;} 50% {border-color:#2aa198;} }
+
+      /* Scrollbar */
+      .terminal-content::-webkit-scrollbar { width: 8px; }
+      .terminal-content::-webkit-scrollbar-track { background: #073642; }
+      .terminal-content::-webkit-scrollbar-thumb { background: #586e75; border-radius: 4px; }
+      .terminal-content::-webkit-scrollbar-thumb:hover { background: #657b83; }
+    </style>
+  </head>
+  <body>
+    <canvas id="particles-canvas"></canvas>
+
+    <div class="container">
+      <div class="terminal-window">
+        <div class="terminal-header">
+          <div class="window-controls">
+            <div class="control-btn close"></div>
+            <div class="control-btn minimize"></div>
+            <div class="control-btn maximize"></div>
+          </div>
+          <div class="terminal-title">terminal</div>
+          <div style="width: 64px"></div>
+        </div>
+
+        <div class="terminal-content" id="terminal-content">
+          <div id="initial-message"></div>
+          <div id="command-history"></div>
+          <div class="input-line">
+            <span class="prompt">kishore@portfolio ~ $</span>
+            <input type="text" id="command-input" autocomplete="off" spellcheck="false" />
+            <span class="cursor">▋</span>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <script>
+      class ParticleSystem {
+        constructor() {
+          this.canvas = document.getElementById('particles-canvas');
+          this.ctx = this.canvas.getContext('2d');
+          this.particles = [];
+          this.init();
+        }
+        init() {
+          this.resizeCanvas();
+          this.createParticles();
+          this.animate();
+          window.addEventListener('resize', () => this.resizeCanvas());
+        }
+        resizeCanvas() { this.canvas.width = window.innerWidth; this.canvas.height = window.innerHeight; }
+        createParticles() {
+          const particleCount = Math.floor((this.canvas.width * this.canvas.height) / 15000);
+          this.particles = [];
+          for (let i = 0; i < particleCount; i++) {
+            this.particles.push({
+              x: Math.random() * this.canvas.width,
+              y: Math.random() * this.canvas.height,
+              vx: (Math.random() - 0.5) * 0.5,
+              vy: (Math.random() - 0.5) * 0.5,
+            });
+          }
+        }
+        animate() {
+          this.ctx.clearRect(0, 0, this.canvas.width, this.canvas.height);
+          this.particles.forEach((p, i) => {
+            p.x += p.vx; p.y += p.vy;
+            if (p.x < 0 || p.x > this.canvas.width) p.vx *= -1;
+            if (p.y < 0 || p.y > this.canvas.height) p.vy *= -1;
+            p.x = Math.max(0, Math.min(this.canvas.width, p.x));
+            p.y = Math.max(0, Math.min(this.canvas.height, p.y));
+
+            this.ctx.fillStyle = 'rgba(147,161,161,0.8)';     // solarized base1
+            this.ctx.beginPath(); this.ctx.arc(p.x, p.y, 2, 0, Math.PI * 2); this.ctx.fill();
+
+            this.particles.slice(i + 1).forEach((q) => {
+              const dx = p.x - q.x, dy = p.y - q.y, d = Math.sqrt(dx*dx + dy*dy);
+              if (d < 150) {
+                const o = 1 - d / 150;
+                this.ctx.strokeStyle = `rgba(147,161,161,${o * 0.5})`;
+                this.ctx.lineWidth = 1; this.ctx.beginPath();
+                this.ctx.moveTo(p.x, p.y); this.ctx.lineTo(q.x, q.y); this.ctx.stroke();
+              }
+            });
+          });
+          requestAnimationFrame(() => this.animate());
+        }
+      }
+
+      class TypewriterEffect {
+        constructor(element, text, speed = 50, callback = null) {
+          this.element = element; this.text = text; this.speed = speed; this.callback = callback; this.index = 0; this.start();
+        }
+        start() {
+          const timer = setInterval(() => {
+            if (this.index < this.text.length) {
+              this.element.textContent += this.text[this.index]; this.index++;
+            } else { clearInterval(timer); if (this.callback) this.callback(); }
+          }, this.speed);
+        }
+      }
+
+      class Terminal {
+        constructor() {
+          this.commandHistory = [];
+          this.input = document.getElementById('command-input');
+          this.content = document.getElementById('terminal-content');
+          this.historyContainer = document.getElementById('command-history');
+          this.initialMessage = document.getElementById('initial-message');
+          this.portfolioData = this.getPortfolioData();
+          this.init();
+        }
+
+        init() {
+          this.showInitialMessage();
+          this.input.addEventListener('keypress', (e) => {
+            if (e.key === 'Enter') { this.handleCommand(this.input.value); this.input.value = ''; }
+          });
+          this.content.addEventListener('click', () => this.input.focus());
+        }
+
+        showInitialMessage() {
+          const messageDiv = document.createElement('div');
+          messageDiv.className = 'command-line';
+          this.initialMessage.appendChild(messageDiv);
+
+          new TypewriterEffect(
+            messageDiv,
+            "Hi - I'm Kishore R, Aspering Full stack developer and Gen AI Enthusiast. Type 'help' to see commands.",
+            80,
+            () => {
+              setTimeout(() => {
+                const tipDiv = document.createElement('div');
+                tipDiv.className = 'command-output';
+                tipDiv.style.color = '#657b83';
+                tipDiv.textContent = "Tip: type 'help' to see available commands.";
+                this.initialMessage.appendChild(tipDiv);
+                setTimeout(() => { this.input.focus(); }, 500);
+              }, 1000);
+            }
+          );
+        }
+
+        handleCommand(command) {
+          const cmd = command.toLowerCase().trim();
+
+          const commandDiv = document.createElement('div');
+          commandDiv.className = 'command-line';
+          commandDiv.innerHTML = `<span class="prompt">kishore@portfolio ~ $</span> ${command}`;
+          this.historyContainer.appendChild(commandDiv);
+
+          let output = [];
+          let className = '';
+
+          switch (cmd) {
+            case 'help': output = this.portfolioData.help; break;
+            case 'about': output = this.portfolioData.about; break;
+            case 'skills': output = this.portfolioData.skills; break;
+            case 'projects': output = this.portfolioData.projects; break;
+            case 'experience': output = this.portfolioData.experience; break;
+            case 'education': output = this.portfolioData.education; break;
+            case 'dsa': output = this.portfolioData.dsa; break;
+            case 'contact': output = this.portfolioData.contact; break;
+            case 'clear':
+              this.historyContainer.innerHTML = '';
+              this.scrollToBottom();
+              return;
+            case '':
+              this.scrollToBottom();
+              return;
+            default:
+              output = [
+                `zsh: command not found: ${cmd}`,
+                "Type 'help' to see available commands."
+              ];
+              className = 'error-text';
+          }
+
+          const outputDiv = document.createElement('div');
+          outputDiv.className = `command-output ${className}`;
+
+          output.forEach((line, idx) => {
+            const lineDiv = document.createElement('div');
+            // Headings: first line or lines ending with ":".
+            if (idx === 0 || line.trim().endsWith(':')) {
+              lineDiv.className = 'heading-text';
+            } else {
+              lineDiv.className = 'command-line-text';
+            }
+            lineDiv.innerHTML = this.linkify(this.escapeHTML(line));
+            outputDiv.appendChild(lineDiv);
+          });
+
+          this.historyContainer.appendChild(outputDiv);
+          this.scrollToBottom();
+        }
+
+        // Escape HTML to avoid accidental injection, then apply linkification
+        escapeHTML(s) {
+          return s.replace(/[&<>"']/g, c => (
+            { '&':'&nbsp;&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;' }[c] || c
+          )).replace(/^\s+/g, m => '&nbsp;'.repeat(m.length)); // preserve leading spaces
+        }
+
+        linkify(text) {
+          // URLs
+          text = text.replace(/(https?:\/\/[^\s<>]+)/g, (m) =>
+            `<a href="${m}" target="_blank" rel="noopener noreferrer">${m}</a>`
+          );
+          // Emails
+          text = text.replace(/([A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,})/g, (m) =>
+            `<a href="mailto:${m}">${m}</a>`
+          );
+          // Phone (+ country or plain digits)
+          text = text.replace(/(\+?\d[\d\s-]{7,}\d)/g, (m) =>
+            `<a href="tel:${m.replace(/\s+/g,'')}">${m}</a>`
+          );
+          return text;
+        }
+
+        scrollToBottom() { this.content.scrollTop = this.content.scrollHeight; }
+
+        getPortfolioData() {
+          return {
+            help: [
+              "Available commands:",
+              "",
+              "  help      - Show this help message",
+              "  about     - Learn about me",
+              "  skills    - View my technical skills",
+              "  projects  - See my recent work",
+              "  experience- Professional background",
+              "  education - Educational qualifications", 
+              "  dsa       - Problem solving profiles",
+              "  contact   - Get in touch with me",
+              "  clear     - Clear terminal screen",
+              "",
+              "💡 Tip: Type any command and press Enter!"
+            ],
+            about: [
+              "Who Am I ?",
+              "",
+              "• I'm a passionate Full Stack Developer with expertise in modern web technologies.",
+              "• I love creating scalable applications and solving complex problems with clean,",
+              "• efficient code. With a strong foundation in both frontend and backend development,",
+              "• I enjoy building end-to-end solutions that deliver exceptional user experiences.",
+              "",
+              "• When I'm not coding, you'll find me exploring new technologies, contributing to",
+              "• open source projects, or solving algorithmic challenges on competitive programming",
+              "• platforms. I believe in continuous learning and staying updated with the latest",
+              "• industry trends and best practices."
+            ],
+            skills: [
+              "Technical Skills & Expertise:",
+              "",
+              "• Frontend: HTML, CSS, React JS, Tailwind CSS, Bootstrap",
+              "",
+              "• Backend: Spring framework, Node JS, Express",
+              "",
+              "• Languages: Core Java, Python, C++, C ",
+              "",
+              "• AI/ML: Data analysis, EDA, Machine learning ",
+              "",
+              "• Databases: MySQL, Mongo DB, PostgreSQL",
+              "",
+              "• Core CS: DSA, OOPs(Java),DBMS, Networking, OS",
+              "",
+              "• Tools & Technologies: Docker, AWS, Linux, Git, GitHub Actions",
+              "",
+              "• Others: Leadership, Time Management"
+            ],
+            projects: [
+              "Featured Projects:",
+              "",
+              "1. 🚀 E-Commerce Platform",
+              "   • Full-stack MERN application with payment integration",
+              "   • Features: Real-time inventory, admin dashboard, order tracking",
+              "   • Tech: React, Node.js, MongoDB, Stripe API, Socket.io",
+              "   • Live Demo: https://ecommerce-demo.vercel.app",
+              "   • GitHub: https://github.com/yourusername/ecommerce-platform",
+              "",
+              "2. 📱 Social Media Dashboard",
+              "   • Analytics dashboard for social media management",
+              "   • Features: Multi-platform integration, real-time analytics",
+              "   • Tech: Next.js, TypeScript, PostgreSQL, Chart.js",
+              "   • Live Demo: https://social-dashboard-demo.vercel.app",
+              "   • GitHub: https://github.com/yourusername/social-dashboard",
+              "",
+              "3. 🤖 AI Chat Application",
+              "   • Intelligent chatbot with natural language processing",
+              "   • Features: Context awareness, multiple AI models, chat history",
+              "   • Tech: React, Python, FastAPI, OpenAI API, WebSocket",
+              "   • Live Demo: https://ai-chat-demo.vercel.app",
+              "   • GitHub: https://github.com/yourusername/ai-chat-app",
+              "",
+              "4. 📊 Task Management System",
+              "   • Collaborative project management tool",
+              "   • Features: Team collaboration, real-time updates, file sharing",
+              "   • Tech: Vue.js, Express.js, PostgreSQL, Redis",
+              "   • Live Demo: https://taskmanager-demo.vercel.app",
+              "   • GitHub: https://github.com/yourusername/task-manager",
+              "",
+              "View more projects: https://github.com/Kishore-R45"
+            ],
+            experience: [
+              "Professional Experience:",
+              "",
+              "Java Full Stack Developer",
+              "   • Company: ZIDIO Development (01/2025 - 04/2025)",
+              "   • Completed a hands-on Java Full Stack Developer internship with a strong focus on Core Java and theSpring Framework.", 
+              "   • Gained practical experience in building scalable web applications using Spring Boot,REST APIs, and modern frontend tools.",
+              "   • Successfully developed two full-fledged projects, including anExpense Tracker with role-based access control an integrated security features. Strengthened skills in end-to-end application development, debugging, and deployment.",
+              "   • Technologies: Core Java, React JS, Spring framework, MySQL",
+              // "",
+              // "🔧 Software Development Intern",
+              // "   • Company: StartupXYZ (Summer 2021)",
+              // "   • Developed REST APIs and frontend components",
+              // "   • Collaborated with design team to implement responsive UI",
+              // "   • Technologies: Python, Django, React, MySQL",
+              // "   • Achievements: Built core features used by 10k+ users"
+            ],
+            education: [
+              "Educational Background:",
+              "",
+              "B.Tech Information Technology",
+              "   College: Easwari Engineering College, Chennai",
+              "   Duration: 2023 - 2027",
+              "   CGPA: 8.3/10 (Current)",
+              "",
+              "HSC",
+              "   School: NS Boys Higher Secondary School, Theni",
+              "   Duration: 2016 - 2023",
+              "   12th Board: 88%",
+              // "",
+              // "Certifications:",
+              // "   • AWS Certified Solutions Architect",
+              // "   • Google Cloud Professional Developer",
+              // "   • Meta React Developer Professional Certificate",
+              // "   • MongoDB Certified Developer"
+            ],
+            dsa: [
+              "Problem Solving & Competitive Programming:",
+              "",
+              "Coding Profiles:",
+              "",
+              "LeetCode:",
+              "   • Profile: https://leetcode.com/Kishore2006_30",
+              "   • Solved: 550+ problems",
+              "",
+              "GeeksforGeeks:",
+              "   • Profile: https://auth.geeksforgeeks.org/user/yourusername",
+              "   • Solved: 300+ problems",
+              "   • Institute Rank: Top 5",
+              "   • Contribution Score: 2000+",
+              "",
+              "Codeforces:",
+              "   • Profile: https://codeforces.com/profile/yourusername",
+              "   • Rating: 1600+ (Specialist)",
+              "   • Contests Participated: 50+",
+              "   • Best Rank: 200th globally",
+              "",
+              "Achievements:",
+              "   • SIH College Level Finalist - 2024",
+            ],
+            contact: [
+              "Let's Connect & Collaborate!",
+              "",
+              "Email: kishoreramesh302006@gmail.com",
+              "Mobile no: +91 8807011265",
+              "",
+              "Follow & Explore me here:",
+              "   • LinkedIn: https://linkedin.com/in/kishore-r45",
+              "   • GitHub: https://github.com/Kishore-R45",
+              "   • Portfolio: https://yourname.dev",
+              "",
+              "I'm always interested in:",
+              "   • New opportunities and exciting projects",
+              "   • Open source collaborations",
+              "   • Tech discussions and knowledge sharing",
+              "   • Freelance and consulting work",
+              "",
+              "Feel free to reach out for any opportunities or just to say hi! 👋"
+            ]
+          };
+        }
+      }
+
+      document.addEventListener('DOMContentLoaded', () => {
+        new ParticleSystem();
+        new Terminal();
+      });
+    </script>
+  </body>
+</html>
